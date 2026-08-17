@@ -1,0 +1,67 @@
+-- Auto Farm simples para o seu próprio jogo
+-- Coloque em ServerScriptService
+
+local Players = game:GetService("Players")
+
+local DAMAGE = 10
+local RANGE = 30
+local ATTACK_COOLDOWN = 0.5
+
+local function getNearestEnemy(character)
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return nil end
+
+	local nearest = nil
+	local distance = RANGE
+
+	for _, enemy in ipairs(workspace.Enemies:GetChildren()) do
+		local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+		local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
+
+		if humanoid and enemyRoot and humanoid.Health > 0 then
+			local d = (enemyRoot.Position - root.Position).Magnitude
+
+			if d < distance then
+				distance = d
+				nearest = enemy
+			end
+		end
+	end
+
+	return nearest
+end
+
+local function startAutoFarm(player)
+	while player.Parent do
+		local character = player.Character
+
+		if character then
+			local enemy = getNearestEnemy(character)
+
+			if enemy then
+				local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+
+				if humanoid then
+					humanoid:TakeDamage(DAMAGE)
+
+					-- Exemplo de recompensa
+					local leaderstats = player:FindFirstChild("leaderstats")
+					local coins = leaderstats and leaderstats:FindFirstChild("Coins")
+
+					if coins then
+						coins.Value += 1
+					end
+				end
+			end
+		end
+
+		task.wait(ATTACK_COOLDOWN)
+	end
+end
+
+Players.PlayerAdded:Connect(function(player)
+	player.CharacterAdded:Connect(function()
+		task.wait(1)
+		task.spawn(startAutoFarm, player)
+	end)
+end)
