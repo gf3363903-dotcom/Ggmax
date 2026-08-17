@@ -1,0 +1,284 @@
+--// CHICKEN FIGHTER HUB
+--// Roblox Studio - seu próprio jogo
+--// Coloque em StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Player = Players.LocalPlayer
+
+--==================================================
+-- CONFIG
+--==================================================
+
+local Settings = {
+	AutoFarm = false,
+	TowerFarm = false,
+	EventFarm = false,
+	AutoCollect = false,
+
+	AttackDelay = 0.25,
+	AttackDistance = 7,
+}
+
+--==================================================
+-- REMOTES
+--==================================================
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local AttackRemote = Remotes:WaitForChild("Attack")
+local CollectRemote = Remotes:FindFirstChild("Collect")
+
+--==================================================
+-- CHARACTER
+--==================================================
+
+local function Character()
+	return Player.Character or Player.CharacterAdded:Wait()
+end
+
+local function Root()
+	return Character():FindFirstChild("HumanoidRootPart")
+end
+
+--==================================================
+-- ENEMY
+--==================================================
+
+local function FindNearest(folder)
+	local root = Root()
+	if not root or not folder then
+		return nil
+	end
+
+	local nearest = nil
+	local distance = math.huge
+
+	for _, enemy in ipairs(folder:GetChildren()) do
+		local humanoid = enemy:FindFirstChildOfClass("Humanoid")
+		local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
+
+		if humanoid and enemyRoot and humanoid.Health > 0 then
+			local d = (root.Position - enemyRoot.Position).Magnitude
+
+			if d < distance then
+				distance = d
+				nearest = enemy
+			end
+		end
+	end
+
+	return nearest
+end
+
+--==================================================
+-- ATTACK
+--==================================================
+
+local function Attack(enemy)
+	if not enemy then
+		return
+	end
+
+	local enemyRoot = enemy:FindFirstChild("HumanoidRootPart")
+	if not enemyRoot then
+		return
+	end
+
+	local root = Root()
+	if not root then
+		return
+	end
+
+	if (root.Position - enemyRoot.Position).Magnitude > Settings.AttackDistance then
+		root.CFrame = enemyRoot.CFrame * CFrame.new(0, 0, Settings.AttackDistance)
+	end
+
+	-- O servidor deve validar o alvo e o dano.
+	AttackRemote:FireServer(enemy)
+end
+
+--==================================================
+-- NORMAL FARM
+--==================================================
+
+task.spawn(function()
+	while task.wait(Settings.AttackDelay) do
+		if Settings.AutoFarm then
+			local enemies = workspace:FindFirstChild("Enemies")
+			local enemy = FindNearest(enemies)
+
+			if enemy then
+				Attack(enemy)
+			end
+		end
+	end
+end)
+
+--==================================================
+-- TOWER FARM
+--==================================================
+
+task.spawn(function()
+	while task.wait(Settings.AttackDelay) do
+		if Settings.TowerFarm then
+			local tower = workspace:FindFirstChild("Tower")
+
+			if tower then
+				local enemies = tower:FindFirstChild("Enemies")
+
+				if enemies then
+					local enemy = FindNearest(enemies)
+
+					if enemy then
+						Attack(enemy)
+					end
+				end
+			end
+		end
+	end
+end)
+
+--==================================================
+-- EVENT FARM
+--==================================================
+
+task.spawn(function()
+	while task.wait(Settings.AttackDelay) do
+		if Settings.EventFarm then
+			local events = workspace:FindFirstChild("Events")
+
+			if events then
+				local activeEvent = events:FindFirstChild("Active")
+
+				if activeEvent then
+					local enemies = activeEvent:FindFirstChild("Enemies")
+
+					if enemies then
+						local enemy = FindNearest(enemies)
+
+						if enemy then
+							Attack(enemy)
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
+--==================================================
+-- AUTO COLLECT
+--==================================================
+
+task.spawn(function()
+	while task.wait(0.5) do
+		if Settings.AutoCollect and CollectRemote then
+			CollectRemote:FireServer()
+		end
+	end
+end)
+
+--==================================================
+-- GUI
+--==================================================
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "ChickenFighterHub"
+Gui.ResetOnSpawn = false
+Gui.Parent = Player:WaitForChild("PlayerGui")
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(260, 300)
+Main.Position = UDim2.new(0, 20, 0.5, -150)
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+Main.BorderSizePixel = 0
+Main.Parent = Gui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 12)
+Corner.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 50)
+Title.BackgroundTransparency = 1
+Title.Text = "🐔 CHICKEN FIGHTER"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.TextSize = 20
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Main
+
+local Layout = Instance.new("UIListLayout")
+Layout.Padding = UDim.new(0, 8)
+Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+Layout.VerticalAlignment = Enum.VerticalAlignment.Top
+Layout.Parent = Main
+
+Title.LayoutOrder = 0
+
+local function Button(text, callback)
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.fromOffset(230, 40)
+	button.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.TextSize = 15
+	button.Font = Enum.Font.GothamSemibold
+	button.Text = text
+	button.LayoutOrder = #Main:GetChildren()
+	button.Parent = Main
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = button
+
+	button.MouseButton1Click:Connect(function()
+		callback(button)
+	end)
+
+	return button
+end
+
+local function Toggle(button, name, variable)
+	Settings[variable] = not Settings[variable]
+
+	button.Text = name .. ": " ..
+		(Settings[variable] and "ON" or "OFF")
+end
+
+Button("⚔️ Auto Farm: OFF", function(button)
+	Toggle(button, "⚔️ Auto Farm", "AutoFarm")
+end)
+
+Button("🗼 Tower Farm: OFF", function(button)
+	Toggle(button, "🗼 Tower Farm", "TowerFarm")
+end)
+
+Button("🎉 Event Farm: OFF", function(button)
+	Toggle(button, "🎉 Event Farm", "EventFarm")
+end)
+
+Button("💰 Auto Collect: OFF", function(button)
+	Toggle(button, "💰 Auto Collect", "AutoCollect")
+end)
+
+Button("❌ Desligar Tudo", function()
+	Settings.AutoFarm = false
+	Settings.TowerFarm = false
+	Settings.EventFarm = false
+	Settings.AutoCollect = false
+
+	for _, object in ipairs(Main:GetChildren()) do
+		if object:IsA("TextButton") then
+			if object.Text:find("Auto Farm") then
+				object.Text = "⚔️ Auto Farm: OFF"
+			elseif object.Text:find("Tower Farm") then
+				object.Text = "🗼 Tower Farm: OFF"
+			elseif object.Text:find("Event Farm") then
+				object.Text = "🎉 Event Farm: OFF"
+			elseif object.Text:find("Auto Collect") then
+				object.Text = "💰 Auto Collect: OFF"
+			end
+		end
+	end
+end)
