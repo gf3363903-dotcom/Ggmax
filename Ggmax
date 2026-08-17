@@ -1,0 +1,424 @@
+--[[
+    ESP REBOTE AJUSTÁVEL - UNIVERSAL ROBLOX
+    Interface FODA com sliders e personalização
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local espAtivo = true
+local corEsp = Color3.fromRGB(0, 255, 0)
+local tamanhoEsp = 1
+local distanciaMax = 1000
+
+-- ===== CRIAR GUI FODA =====
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 420, 0, 500)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -250)
+mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 30)
+mainFrame.BackgroundTransparency = 0.05
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 20)
+mainCorner.Parent = mainFrame
+
+local mainShadow = Instance.new("UIShadow")
+mainShadow.Parent = mainFrame
+
+-- Título com glow
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 50)
+title.Text = "⚡ ESP REBOTE PRO ⚡"
+title.TextColor3 = Color3.fromRGB(0, 200, 255)
+title.BackgroundTransparency = 1
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- Botão fechar
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 40, 0, 40)
+closeBtn.Position = UDim2.new(1, -45, 0, 5)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 50, 50)
+closeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+closeBtn.TextScaled = true
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = mainFrame
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 10)
+closeCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+    espAtivo = not espAtivo
+end)
+
+-- Botão minimizar
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 40, 0, 40)
+minBtn.Position = UDim2.new(1, -90, 0, 5)
+minBtn.Text = "─"
+minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+minBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+minBtn.TextScaled = true
+minBtn.Font = Enum.Font.GothamBold
+minBtn.Parent = mainFrame
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 10)
+minCorner.Parent = minBtn
+
+local miniFrame = nil
+
+minBtn.MouseButton1Click:Connect(function()
+    if miniFrame then
+        miniFrame:Destroy()
+        miniFrame = nil
+        mainFrame.Visible = true
+        return
+    end
+    
+    mainFrame.Visible = false
+    miniFrame = Instance.new("Frame")
+    miniFrame.Size = UDim2.new(0, 200, 0, 50)
+    miniFrame.Position = UDim2.new(0.8, 0, 0.9, 0)
+    miniFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 30)
+    miniFrame.BackgroundTransparency = 0.05
+    miniFrame.Active = true
+    miniFrame.Draggable = true
+    miniFrame.Parent = screenGui
+    
+    local miniCorner = Instance.new("UICorner")
+    miniCorner.CornerRadius = UDim.new(0, 15)
+    miniCorner.Parent = miniFrame
+    
+    local miniTitle = Instance.new("TextLabel")
+    miniTitle.Size = UDim2.new(1, 0, 1, 0)
+    miniTitle.Text = "⚡ ESP"
+    miniTitle.TextColor3 = Color3.fromRGB(0, 200, 255)
+    miniTitle.BackgroundTransparency = 1
+    miniTitle.TextScaled = true
+    miniTitle.Font = Enum.Font.GothamBold
+    miniTitle.Parent = miniFrame
+    
+    miniFrame.MouseButton1Click:Connect(function()
+        miniFrame:Destroy()
+        miniFrame = nil
+        mainFrame.Visible = true
+    end)
+end)
+
+-- ===== FUNÇÃO PARA CRIAR SLIDER =====
+local function criarSlider(titulo, posY, min, max, padrao, callback)
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.8, 0, 0, 25)
+    label.Position = UDim2.new(0.1, 0, 0, posY)
+    label.Text = titulo .. ": " .. padrao
+    label.TextColor3 = Color3.fromRGB(200, 200, 255)
+    label.BackgroundTransparency = 1
+    label.TextScaled = true
+    label.Font = Enum.Font.Gotham
+    label.Parent = mainFrame
+    
+    local slider = Instance.new("Frame")
+    slider.Size = UDim2.new(0.8, 0, 0, 6)
+    slider.Position = UDim2.new(0.1, 0, 0, posY + 28)
+    slider.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+    slider.Parent = mainFrame
+    
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(1, 0)
+    sliderCorner.Parent = slider
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((padrao - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    fill.Parent = slider
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(1, 0)
+    fillCorner.Parent = fill
+    
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = UDim2.new((padrao - min) / (max - min), -8, 0.5, -8)
+    knob.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    knob.Parent = slider
+    
+    local knobCorner = Instance.new("UICorner")
+    knobCorner.CornerRadius = UDim.new(1, 0)
+    knobCorner.Parent = knob
+    
+    local dragging = false
+    
+    local function updateSlider(input)
+        local pos = input.Position.X - slider.AbsolutePosition.X
+        local width = slider.AbsoluteSize.X
+        local valor = math.clamp(pos / width, 0, 1)
+        local valorReal = min + (max - min) * valor
+        fill.Size = UDim2.new(valor, 0, 1, 0)
+        knob.Position = UDim2.new(valor, -8, 0.5, -8)
+        label.Text = titulo .. ": " .. math.round(valorReal)
+        callback(valorReal)
+    end
+    
+    slider.MouseButton1Down:Connect(function()
+        dragging = true
+        updateSlider({Position = UserInputService:GetMouseLocation()})
+    end)
+    
+    UserInputService.InputMoved:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateSlider(input)
+        end
+    end)
+    
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    return {label = label, slider = slider, fill = fill, knob = knob}
+end
+
+-- ===== FUNÇÃO PARA CRIAR BOTÃO DE COR =====
+local function criarBotaoCor(titulo, posY, corPadrao, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.3, 0, 0, 35)
+    btn.Position = UDim2.new(0.35, 0, 0, posY)
+    btn.Text = titulo
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.BackgroundColor3 = corPadrao
+    btn.TextScaled = true
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = mainFrame
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
+    
+    btn.MouseButton1Click:Connect(function()
+        local cores = {
+            Color3.fromRGB(0, 255, 0),
+            Color3.fromRGB(255, 0, 0),
+            Color3.fromRGB(0, 0, 255),
+            Color3.fromRGB(255, 255, 0),
+            Color3.fromRGB(255, 0, 255),
+            Color3.fromRGB(0, 255, 255),
+            Color3.fromRGB(255, 165, 0),
+            Color3.fromRGB(255, 255, 255)
+        }
+        local atual = 1
+        for i, cor in pairs(cores) do
+            if cor == btn.BackgroundColor3 then
+                atual = i % #cores + 1
+                break
+            end
+        end
+        btn.BackgroundColor3 = cores[atual]
+        callback(cores[atual])
+    end)
+    
+    return btn
+end
+
+-- ===== SLIDERS =====
+local tamanhoSlider = criarSlider("Tamanho", 65, 0.5, 3, 1, function(val)
+    tamanhoEsp = val
+end)
+
+local distanciaSlider = criarSlider("Distância", 115, 100, 2000, 1000, function(val)
+    distanciaMax = val
+end)
+
+-- ===== BOTÃO DE COR =====
+local corBtn = criarBotaoCor("Cor", 175, corEsp, function(cor)
+    corEsp = cor
+end)
+
+-- ===== BOTÃO DE ATIVAR/DESATIVAR =====
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0.3, 0, 0, 40)
+toggleBtn.Position = UDim2.new(0.35, 0, 0, 220)
+toggleBtn.Text = "DESATIVAR"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.TextScaled = true
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 10)
+toggleCorner.Parent = toggleBtn
+
+toggleBtn.MouseButton1Click:Connect(function()
+    espAtivo = not espAtivo
+    if espAtivo then
+        toggleBtn.Text = "DESATIVAR"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    else
+        toggleBtn.Text = "ATIVAR"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    end
+end)
+
+-- ===== BOTÃO DE RESET =====
+local resetBtn = Instance.new("TextButton")
+resetBtn.Size = UDim2.new(0.3, 0, 0, 35)
+resetBtn.Position = UDim2.new(0.35, 0, 0, 270)
+resetBtn.Text = "RESETAR"
+resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 150)
+resetBtn.TextScaled = true
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.Parent = mainFrame
+
+local resetCorner = Instance.new("UICorner")
+resetCorner.CornerRadius = UDim.new(0, 8)
+resetCorner.Parent = resetBtn
+
+resetBtn.MouseButton1Click:Connect(function()
+    tamanhoEsp = 1
+    distanciaMax = 1000
+    corEsp = Color3.fromRGB(0, 255, 0)
+    tamanhoSlider.label.Text = "Tamanho: 1"
+    tamanhoSlider.fill.Size = UDim2.new(0.5, 0, 1, 0)
+    tamanhoSlider.knob.Position = UDim2.new(0.5, -8, 0.5, -8)
+    distanciaSlider.label.Text = "Distância: 1000"
+    distanciaSlider.fill.Size = UDim2.new(0.5, 0, 1, 0)
+    distanciaSlider.knob.Position = UDim2.new(0.5, -8, 0.5, -8)
+    corBtn.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    espAtivo = true
+    toggleBtn.Text = "DESATIVAR"
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+end)
+
+-- ===== CRÉDITOS =====
+local credits = Instance.new("TextLabel")
+credits.Size = UDim2.new(0.8, 0, 0, 25)
+credits.Position = UDim2.new(0.1, 0, 0, 325)
+credits.Text = "⚡ ESP REBOTE PRO v2.0"
+credits.TextColor3 = Color3.fromRGB(100, 100, 200)
+credits.BackgroundTransparency = 1
+credits.TextScaled = true
+credits.Font = Enum.Font.Gotham
+credits.Parent = mainFrame
+
+-- ===== ESP DRAWING =====
+local espObjects = {}
+
+local function criarEsp(part, cor, tamanho)
+    local box = Instance.new("BoxHandleAdornment")
+    box.AlwaysOnTop = true
+    box.Adornee = part
+    box.Size = part.Size + Vector3.new(0.5, 0.5, 0.5) * tamanho
+    box.Color3 = cor
+    box.Transparency = 0.3
+    box.ZIndex = 10
+    box.Parent = part
+    
+    local outline = Instance.new("BoxHandleAdornment")
+    outline.AlwaysOnTop = true
+    outline.Adornee = part
+    outline.Size = part.Size + Vector3.new(0.7, 0.7, 0.7) * tamanho
+    outline.Color3 = Color3.fromRGB(255, 255, 255)
+    outline.Transparency = 0.1
+    outline.ZIndex = 9
+    outline.Parent = part
+    
+    return {box, outline}
+end
+
+local function removerEsp(part)
+    if espObjects[part] then
+        for _, obj in pairs(espObjects[part]) do
+            obj:Destroy()
+        end
+        espObjects[part] = nil
+    end
+end
+
+-- ===== ATUALIZAR ESP =====
+RunService.RenderStepped:Connect(function()
+    if not espAtivo then
+        for part, objs in pairs(espObjects) do
+            for _, obj in pairs(objs) do
+                obj:Destroy()
+            end
+        end
+        espObjects = {}
+        return
+    end
+    
+    local novosObjetos = {}
+    
+    for _, jogador in pairs(Players:GetPlayers()) do
+        if jogador ~= player and jogador.Character and jogador.Character:FindFirstChild("HumanoidRootPart") then
+            local root = jogador.Character.HumanoidRootPart
+            local dist = (root.Position - camera.CFrame.Position).Magnitude
+            
+            if dist <= distanciaMax then
+                if not espObjects[root] then
+                    espObjects[root] = criarEsp(root, corEsp, tamanhoEsp)
+                else
+                    -- Atualizar cor e tamanho
+                    for _, obj in pairs(espObjects[root]) do
+                        if obj:IsA("BoxHandleAdornment") then
+                            if obj.Color3 ~= Color3.fromRGB(255, 255, 255) then
+                                obj.Color3 = corEsp
+                            end
+                            obj.Size = root.Size + Vector3.new(0.5, 0.5, 0.5) * tamanhoEsp
+                        end
+                    end
+                end
+                novosObjetos[root] = true
+            else
+                removerEsp(root)
+            end
+        end
+    end
+    
+    -- Remover ESP de jogadores que saíram
+    for part, _ in pairs(espObjects) do
+        if not novosObjetos[part] then
+            removerEsp(part)
+        end
+    end
+end)
+
+-- ===== LIMPAR AO SAIR =====
+player.CharacterRemoving:Connect(function()
+    for part, objs in pairs(espObjects) do
+        for _, obj in pairs(objs) do
+            obj:Destroy()
+        end
+    end
+    espObjects = {}
+end)
+
+-- ===== HOTKEY (F) =====
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.F then
+        espAtivo = not espAtivo
+        if espAtivo then
+            toggleBtn.Text = "DESATIVAR"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        else
+            toggleBtn.Text = "ATIVAR"
+            toggleBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        end
+    end
+end)
