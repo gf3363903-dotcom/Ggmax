@@ -1,0 +1,592 @@
+--[[
+    AIM ASSIST / TARGET LOCK
+    Coloque em:
+    StarterPlayer > StarterPlayerScripts
+
+    Recursos:
+    - GUI arrastável
+    - Ativar/desativar
+    - FOV configurável
+    - Head / Torso
+    - Distância máxima
+    - Suavização
+    - Verificação de linha de visão
+    - Ignora o próprio jogador
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+--==================================================
+-- CONFIGURAÇÃO
+--==================================================
+
+local Config = {
+	Enabled = false,
+	AimPart = "Head",
+	MaxDistance = 250,
+	FOV = 120,
+	Smoothness = 0.15,
+	TeamCheck = true,
+	VisibleCheck = true,
+}
+
+--==================================================
+-- CORES
+--==================================================
+
+local Colors = {
+	Background = Color3.fromRGB(12, 15, 20),
+	Panel = Color3.fromRGB(20, 24, 32),
+	Button = Color3.fromRGB(30, 36, 48),
+	Accent = Color3.fromRGB(0, 170, 255),
+	AccentDark = Color3.fromRGB(0, 100, 160),
+	Text = Color3.fromRGB(235, 240, 250),
+	Muted = Color3.fromRGB(150, 160, 175),
+	Enabled = Color3.fromRGB(40, 190, 100),
+	Disabled = Color3.fromRGB(190, 55, 55),
+}
+
+--==================================================
+-- GUI
+--==================================================
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "AimAssistGUI"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(280, 330)
+Main.Position = UDim2.new(0.5, -140, 0.5, -165)
+Main.BackgroundColor3 = Colors.Background
+Main.BorderSizePixel = 0
+Main.Parent = Gui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.Parent = Main
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Colors.Accent
+MainStroke.Thickness = 1.5
+MainStroke.Parent = Main
+
+--==================================================
+-- TÍTULO
+--==================================================
+
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 42)
+TitleBar.BackgroundColor3 = Colors.Panel
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = Main
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 12)
+TitleCorner.Parent = TitleBar
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -20, 1, 0)
+Title.Position = UDim2.fromOffset(10, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "AIM ASSIST"
+Title.TextColor3 = Colors.Text
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TitleBar
+
+--==================================================
+-- CONTAINER
+--==================================================
+
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(1, -20, 1, -55)
+Container.Position = UDim2.fromOffset(10, 50)
+Container.BackgroundTransparency = 1
+Container.Parent = Main
+
+local Layout = Instance.new("UIListLayout")
+Layout.Padding = UDim.new(0, 8)
+Layout.SortOrder = Enum.SortOrder.LayoutOrder
+Layout.Parent = Container
+
+--==================================================
+-- BOTÃO
+--==================================================
+
+local function CreateButton(text, order)
+	local Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(1, 0, 0, 38)
+	Button.BackgroundColor3 = Colors.Button
+	Button.BorderSizePixel = 0
+	Button.AutoButtonColor = false
+	Button.Text = text
+	Button.TextColor3 = Colors.Text
+	Button.Font = Enum.Font.GothamMedium
+	Button.TextSize = 13
+	Button.LayoutOrder = order
+	Button.Parent = Container
+	local Corner = Instance.new("UICorner")
+	Corner.CornerRadius = UDim.new(0, 8)
+	Corner.Parent = Button
+	local Stroke = Instance.new("UIStroke")
+	Stroke.Color = Colors.Accent
+	Stroke.Transparency = 0.6
+	Stroke.Parent = Button
+	return Button
+end
+
+--==================================================
+-- AIMBOT ON/OFF
+--==================================================
+
+local AimButton = CreateButton("[ AIM ]  OFF", 1)
+
+local function UpdateAimButton()
+	if Config.Enabled then
+		AimButton.Text = "[ AIM ]  ON"
+		AimButton.BackgroundColor3 = Colors.Enabled
+	else
+		AimButton.Text = "[ AIM ]  OFF"
+		AimButton.BackgroundColor3 = Colors.Disabled
+	end
+end
+
+AimButton.MouseButton1Click:Connect(function()
+	Config.Enabled = not Config.Enabled
+	UpdateAimButton()
+end)
+
+UpdateAimButton()
+
+--==================================================
+-- TARGET PART
+--==================================================
+
+local TargetButton = CreateButton("[ TARGET ]  HEAD", 2)
+
+TargetButton.MouseButton1Click:Connect(function()
+	if Config.AimPart == "Head" then
+		Config.AimPart = "HumanoidRootPart"
+		TargetButton.Text = "[ TARGET ]  TORSO"
+	else
+		Config.AimPart = "Head"
+		TargetButton.Text = "[ TARGET ]  HEAD"
+	end
+end)
+
+--==================================================
+-- SLIDER GENÉRICO
+--==================================================
+
+local function CreateSlider(title, minimum, maximum, initial, order, callback)
+
+	local Holder = Instance.new("Frame")
+	Holder.Size = UDim2.new(1, 0, 0, 52)
+	Holder.BackgroundColor3 = Colors.Panel
+	Holder.BorderSizePixel = 0
+	Holder.LayoutOrder = order
+	Holder.Parent = Container
+	local Corner = Instance.new("UICorner")
+	Corner.CornerRadius = UDim.new(0, 8)
+	Corner.Parent = Holder
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(1, -16, 0, 20)
+	Label.Position = UDim2.fromOffset(8, 3)
+	Label.BackgroundTransparency = 1
+	Label.TextColor3 = Colors.Muted
+	Label.Font = Enum.Font.Gotham
+	Label.TextSize = 11
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Holder
+	local Track = Instance.new("Frame")
+	Track.Size = UDim2.new(1, -16, 0, 6)
+	Track.Position = UDim2.new(0, 8, 0, 34)
+	Track.BackgroundColor3 = Colors.Background
+	Track.BorderSizePixel = 0
+	Track.Parent = Holder
+	local TrackCorner = Instance.new("UICorner")
+	TrackCorner.CornerRadius = UDim.new(1, 0)
+	TrackCorner.Parent = Track
+	local Fill = Instance.new("Frame")
+	Fill.Size = UDim2.new(0, 0, 1, 0)
+	Fill.BackgroundColor3 = Colors.Accent
+	Fill.BorderSizePixel = 0
+	Fill.Parent = Track
+	local FillCorner = Instance.new("UICorner")
+	FillCorner.CornerRadius = UDim.new(1, 0)
+	FillCorner.Parent = Fill
+	local Knob = Instance.new("Frame")
+	Knob.Size = UDim2.fromOffset(14, 14)
+	Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+	Knob.BackgroundColor3 = Colors.Accent
+	Knob.BorderSizePixel = 0
+	Knob.Parent = Track
+	local KnobCorner = Instance.new("UICorner")
+	KnobCorner.CornerRadius = UDim.new(1, 0)
+	KnobCorner.Parent = Knob
+	local value = initial
+	local dragging = false
+	local function SetValueFromX(x)
+		local position =
+			math.clamp(
+				(x - Track.AbsolutePosition.X)
+					/ Track.AbsoluteSize.X,
+				0,
+				1
+			)
+		value = minimum + (maximum - minimum) * position
+		if maximum - minimum >= 10 then
+			value = math.floor(value + 0.5)
+		else
+			value = math.floor(value * 100 + 0.5) / 100
+		end
+		local percent =
+			(value - minimum)
+			/ (maximum - minimum)
+		Fill.Size = UDim2.new(percent, 0, 1, 0)
+		Knob.Position = UDim2.new(percent, 0, 0.5, 0)
+		Label.Text = title .. ": " .. tostring(value)
+		if callback then
+			callback(value)
+		end
+	end
+	SetValueFromX(
+		Track.AbsolutePosition.X
+		+ Track.AbsoluteSize.X
+		* ((initial - minimum) / (maximum - minimum))
+	)
+	Track.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			SetValueFromX(input.Position.X)
+		end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if not dragging then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseMovement
+			or input.UserInputType == Enum.UserInputType.Touch then
+			SetValueFromX(input.Position.X)
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	return Holder
+end
+
+--==================================================
+-- FOV
+--==================================================
+
+CreateSlider(
+	"FOV",
+	20,
+	300,
+	Config.FOV,
+	3,
+	function(value)
+		Config.FOV = value
+	end
+)
+
+--==================================================
+-- DISTÂNCIA
+--==================================================
+
+CreateSlider(
+	"MAX DISTANCE",
+	50,
+	1000,
+	Config.MaxDistance,
+	4,
+	function(value)
+		Config.MaxDistance = value
+	end
+)
+
+--==================================================
+-- SUAVIZAÇÃO
+--==================================================
+
+CreateSlider(
+	"SMOOTHNESS",
+	0.01,
+	1,
+	Config.Smoothness,
+	5,
+	function(value)
+		Config.Smoothness = value
+	end
+)
+
+--==================================================
+-- FOV CIRCLE
+--==================================================
+
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "FOVCircle"
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.Position = UDim2.fromScale(0.5, 0.5)
+FOVCircle.Size = UDim2.fromOffset(Config.FOV * 2, Config.FOV * 2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.BorderSizePixel = 0
+FOVCircle.Visible = true
+FOVCircle.Parent = Gui
+
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVCircle
+
+local FOVStroke = Instance.new("UIStroke")
+FOVStroke.Color = Colors.Accent
+FOVStroke.Thickness = 1.5
+FOVStroke.Transparency = 0.25
+FOVStroke.Parent = FOVCircle
+
+--==================================================
+-- VISIBILIDADE DO FOV
+--==================================================
+
+local function UpdateFOV()
+
+	FOVCircle.Size =
+		UDim2.fromOffset(
+			Config.FOV * 2,
+			Config.FOV * 2
+		)
+	FOVCircle.Visible = Config.Enabled
+end
+
+--==================================================
+-- LINHA DE VISÃO
+--==================================================
+
+local function IsVisible(part)
+
+	if not Config.VisibleCheck then
+		return true
+	end
+	local Character = LocalPlayer.Character
+	if not Character then
+		return false
+	end
+	local Origin = Camera.CFrame.Position
+	local Direction = part.Position - Origin
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+	Params.FilterDescendantsInstances = {
+		Character
+	}
+	local Result =
+		workspace:Raycast(
+			Origin,
+			Direction,
+			Params
+		)
+	if not Result then
+		return true
+	end
+	return Result.Instance:IsDescendantOf(part.Parent)
+end
+
+--==================================================
+-- CHECA PLAYER
+--==================================================
+
+local function IsValidPlayer(Player)
+
+	if Player == LocalPlayer then
+		return false
+	end
+	if Config.TeamCheck
+		and LocalPlayer.Team ~= nil
+		and Player.Team == LocalPlayer.Team then
+		return false
+	end
+	local Character = Player.Character
+	if not Character then
+		return false
+	end
+	local Humanoid =
+		Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid or Humanoid.Health <= 0 then
+		return false
+	end
+	return true
+end
+
+--==================================================
+-- PEGA PARTE DO ALVO
+--==================================================
+
+local function GetAimPart(Character)
+
+	if Config.AimPart == "Head" then
+		return Character:FindFirstChild("Head")
+	else
+		return Character:FindFirstChild("HumanoidRootPart")
+			or Character:FindFirstChild("UpperTorso")
+			or Character:FindFirstChild("Torso")
+	end
+end
+
+--==================================================
+-- PROCURA MELHOR ALVO
+--==================================================
+
+local function GetBestTarget()
+
+	local BestPart = nil
+	local BestScreenDistance = math.huge
+	local ViewportSize = Camera.ViewportSize
+	local ScreenCenter =
+		Vector2.new(
+			ViewportSize.X / 2,
+			ViewportSize.Y / 2
+		)
+	for _, Player in ipairs(Players:GetPlayers()) do
+		if IsValidPlayer(Player) then
+			local Character = Player.Character
+			local Part = GetAimPart(Character)
+			if Part then
+				local WorldDistance =
+					(Part.Position - Camera.CFrame.Position).Magnitude
+				if WorldDistance <= Config.MaxDistance then
+					local ScreenPosition, OnScreen =
+						Camera:WorldToViewportPoint(
+							Part.Position
+						)
+					if OnScreen then
+						local ScreenDistance =
+							(
+								Vector2.new(
+									ScreenPosition.X,
+									ScreenPosition.Y
+								)
+								- ScreenCenter
+							).Magnitude
+						if ScreenDistance <= Config.FOV then
+							if IsVisible(Part) then
+								if ScreenDistance < BestScreenDistance then
+									BestScreenDistance =
+										ScreenDistance
+									BestPart = Part
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return BestPart
+end
+
+--==================================================
+-- DRAG DA GUI
+--==================================================
+
+local Dragging = false
+local DragStart
+local StartPosition
+
+TitleBar.InputBegan:Connect(function(input)
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		Dragging = true
+		DragStart = input.Position
+		StartPosition = Main.Position
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+	if not Dragging then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch then
+		local Delta =
+			input.Position - DragStart
+		Main.Position =
+			UDim2.new(
+				StartPosition.X.Scale,
+				StartPosition.X.Offset + Delta.X,
+				StartPosition.Y.Scale,
+				StartPosition.Y.Offset + Delta.Y
+			)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+		Dragging = false
+	end
+end)
+
+--==================================================
+-- LOOP PRINCIPAL
+--==================================================
+
+RunService:BindToRenderStep(
+	"AimAssist",
+	Enum.RenderPriority.Camera.Value + 1,
+	function()
+		UpdateFOV()
+		if not Config.Enabled then
+			return
+		end
+		local Target = GetBestTarget()
+		if not Target then
+			return
+		end
+		local CameraPosition =
+			Camera.CFrame.Position
+		local TargetCFrame =
+			CFrame.lookAt(
+				CameraPosition,
+				Target.Position
+			)
+		-- Smoothness menor = mais suave/lento
+		-- Smoothness maior = mais rápido
+		local Alpha =
+			math.clamp(
+				Config.Smoothness,
+				0.01,
+				1
+			)
+		Camera.CFrame =
+			Camera.CFrame:Lerp(
+				TargetCFrame,
+				Alpha
+			)
+	end
+)
+
+--==================================================
+-- RESET AO RESPAWN
+--==================================================
+
+LocalPlayer.CharacterAdded:Connect(function()
+
+	task.wait(1)
+	Camera = workspace.CurrentCamera
+end)
