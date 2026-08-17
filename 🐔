@@ -1,0 +1,800 @@
+// ===================================
+// GROW A CHICKEN FIGHTER - Game Script
+// ===================================
+
+const config = {
+    type: Phaser.AUTO,
+    parent: 'gameContainer',
+    width: 1024,
+    height: 768,
+    backgroundColor: '#87CEEB',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 300 },
+            debug: false
+        }
+    },
+    scene: [MenuScene, GameScene, UpgradeScene, BattleScene, GameOverScene]
+};
+
+const game = new Phaser.Game(config);
+
+// ================================
+// MENU SCENE
+// ================================
+class MenuScene extends Phaser.Scene {
+    constructor() {
+        super('menu');
+    }
+
+    create() {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+
+        // Background gradiente
+        this.add.rectangle(0, 0, width, height, 0xFF6B00).setOrigin(0, 0);
+        
+        // Título
+        this.add.text(width / 2, 100, 'GROW A CHICKEN FIGHTER', {
+            font: 'bold 48px Arial',
+            fill: '#FFFF00',
+            stroke: '#FF0000',
+            strokeThickness: 3
+        }).setOrigin(0.5);
+
+        // Subtítulo
+        this.add.text(width / 2, 160, '🐔 Treine seu Frango para Combater! 🐔', {
+            font: 'bold 24px Arial',
+            fill: '#FFFFFF'
+        }).setOrigin(0.5);
+
+        // Instruções
+        this.add.text(width / 2, 280, 'Como Jogar:', {
+            font: 'bold 20px Arial',
+            fill: '#FFFF00'
+        }).setOrigin(0.5);
+
+        const instructions = `
+        • Pressione [SPACE] para treinar seu frango
+        • Pressione [E] para alimentar seu frango
+        • Pressione [U] para acessar upgrades
+        • Pressione [B] para desafiar inimigos
+        • Ganhe EXP e suba de nível
+        • Derrote inimigos para ganhar ouro
+        • Evolua seu frango e domine o mundo!
+        `;
+
+        this.add.text(width / 2, 400, instructions, {
+            font: '16px Arial',
+            fill: '#FFFFFF',
+            align: 'center',
+            wordWrap: { width: 600 }
+        }).setOrigin(0.5);
+
+        // Botão Start
+        const startBtn = this.add.rectangle(width / 2, 620, 200, 60, 0x00AA00)
+            .setInteractive({ useHandCursor: true });
+        
+        this.add.text(width / 2, 620, 'INICIAR JOGO', {
+            font: 'bold 24px Arial',
+            fill: '#FFFFFF'
+        }).setOrigin(0.5);
+
+        startBtn.on('pointerdown', () => {
+            this.scene.start('game');
+        });
+
+        startBtn.on('pointerover', () => {
+            startBtn.setFillStyle(0x00DD00);
+        });
+
+        startBtn.on('pointerout', () => {
+            startBtn.setFillStyle(0x00AA00);
+        });
+    }
+}
+
+// ================================
+// GAME SCENE
+// ================================
+class GameScene extends Phaser.Scene {
+    constructor() {
+        super('game');
+    }
+
+    create() {
+        // Background
+        this.add.rectangle(0, 0, 1024, 768, 0x87CEEB).setOrigin(0, 0);
+        this.add.rectangle(0, 600, 1024, 168, 0x8B7355).setOrigin(0, 0); // Chão
+
+        // Inicializar estatísticas do frango
+        this.chicken = {
+            level: 1,
+            exp: 0,
+            expMax: 100,
+            hp: 100,
+            hpMax: 100,
+            maxHp: 100,
+            attack: 10,
+            defense: 5,
+            speed: 8,
+            size: 1,
+            gold: 0,
+            hunger: 100,
+            hunger_max: 100,
+            evolution: 'Baby'
+        };
+
+        // Criar sprite do frango
+        this.chickenGroup = this.add.group();
+        this.createChickenSprite();
+
+        // Criar frutas (pickups)
+        this.frutas = this.physics.add.group();
+        this.spawnFruit();
+
+        // Inimigos
+        this.enemies = this.physics.add.group();
+        this.spawnEnemy();
+
+        // Sistema de partículas para efeitos
+        this.particles = this.add.particles(0xFFD700);
+
+        // Texto flutuante
+        this.floatingTexts = [];
+
+        // Input
+        this.setupInput();
+
+        // Timer para eventos
+        this.time.addEvent({
+            delay: 3000,
+            callback: () => this.spawnFruit(),
+            loop: true
+        });
+
+        this.time.addEvent({
+            delay: 5000,
+            callback: () => this.decreaseHunger(),
+            loop: true
+        });
+
+        this.time.addEvent({
+            delay: 1000,
+            callback: () => this.updateUI(),
+            loop: true
+        });
+
+        this.updateUI();
+    }
+
+    createChickenSprite() {
+        this.chickenGroup.clear(true, true);
+
+        const x = 150;
+        const y = 550;
+        const scale = this.chicken.size;
+
+        // Corpo
+        const body = this.add.ellipse(x, y, 40 * scale, 50 * scale, 0xFFD700);
+        body.setDepth(1);
+        this.chickenGroup.add(body);
+
+        // Cabeça
+        const head = this.add.ellipse(x + 5 * scale, y - 30 * scale, 30 * scale, 30 * scale, 0xFFD700);
+        head.setDepth(2);
+        this.chickenGroup.add(head);
+
+        // Bico
+        const bico = this.add.polygon(x + 20 * scale, y - 35 * scale, [0, 0, 15 * scale, -3 * scale, 15 * scale, 3 * scale], 0xFF6600);
+        bico.setDepth(3);
+        this.chickenGroup.add(bico);
+
+        // Olhos
+        const olho1 = this.add.ellipse(x + 3 * scale, y - 38 * scale, 4, 6, 0x000000);
+        olho1.setDepth(3);
+        this.chickenGroup.add(olho1);
+
+        const olho2 = this.add.ellipse(x + 12 * scale, y - 38 * scale, 4, 6, 0x000000);
+        olho2.setDepth(3);
+        this.chickenGroup.add(olho2);
+
+        // Pernas
+        const perna1 = this.add.rectangle(x - 10 * scale, y + 20 * scale, 4, 15 * scale, 0xFF6600);
+        perna1.setDepth(0);
+        this.chickenGroup.add(perna1);
+
+        const perna2 = this.add.rectangle(x + 10 * scale, y + 20 * scale, 4, 15 * scale, 0xFF6600);
+        perna2.setDepth(0);
+        this.chickenGroup.add(perna2);
+
+        // Crista
+        if (this.chicken.level >= 3) {
+            const crista = this.add.polygon(x + 2 * scale, y - 50 * scale, [0, 0, -3 * scale, -10 * scale, 3 * scale, -10 * scale], 0xFF0000);
+            crista.setDepth(3);
+            this.chickenGroup.add(crista);
+        }
+
+        // Asas
+        if (this.chicken.level >= 5) {
+            const asa1 = this.add.rectangle(x - 30 * scale, y, 15 * scale, 20 * scale, 0xFFAA00);
+            asa1.setDepth(0);
+            this.chickenGroup.add(asa1);
+
+            const asa2 = this.add.rectangle(x + 30 * scale, y, 15 * scale, 20 * scale, 0xFFAA00);
+            asa2.setDepth(0);
+            this.chickenGroup.add(asa2);
+        }
+    }
+
+    setupInput() {
+        this.input.keyboard.on('keydown-SPACE', () => this.trainChicken());
+        this.input.keyboard.on('keydown-E', () => this.feedChicken());
+        this.input.keyboard.on('keydown-U', () => this.scene.start('upgrade'));
+        this.input.keyboard.on('keydown-B', () => this.startBattle());
+        this.input.keyboard.on('keydown-ESC', () => this.scene.start('menu'));
+    }
+
+    trainChicken() {
+        if (this.chicken.hunger <= 0) {
+            this.showMessage('Seu frango está muito fraco para treinar! Alimente-o primeiro.', 0xFF0000);
+            return;
+        }
+
+        const expGain = Phaser.Math.Between(15, 35);
+        this.chicken.exp += expGain;
+        this.chicken.hunger -= 10;
+
+        this.showMessage(`+${expGain} EXP`, 0x00FF00);
+
+        // Animação de treino
+        this.tweens.add({
+            targets: this.chickenGroup.getChildren(),
+            y: '-=20',
+            duration: 200,
+            yoyo: true,
+            repeat: 1
+        });
+
+        if (this.chicken.exp >= this.chicken.expMax) {
+            this.levelUp();
+        }
+
+        this.updateUI();
+    }
+
+    feedChicken() {
+        if (this.chicken.hunger >= this.chicken.hunger_max) {
+            this.showMessage('Seu frango está satisfeito!', 0xFFFF00);
+            return;
+        }
+
+        const hunger_gain = Phaser.Math.Between(20, 40);
+        this.chicken.hunger = Math.min(this.chicken.hunger + hunger_gain, this.chicken.hunger_max);
+        this.chicken.gold -= 10;
+
+        if (this.chicken.gold < 0) {
+            this.chicken.gold = 0;
+            this.showMessage('Ouro insuficiente!', 0xFF0000);
+            return;
+        }
+
+        this.showMessage(`Frango alimentado! +${hunger_gain}`, 0xFFAA00);
+        this.updateUI();
+    }
+
+    levelUp() {
+        this.chicken.level++;
+        this.chicken.exp = 0;
+        this.chicken.expMax += 50;
+        this.chicken.attack += 5;
+        this.chicken.defense += 3;
+        this.chicken.speed += 2;
+        this.chicken.size += 0.15;
+        this.chicken.maxHp += 30;
+        this.chicken.hp = this.chicken.maxHp;
+
+        // Determinar evolução
+        if (this.chicken.level >= 10) {
+            this.chicken.evolution = 'Super';
+        } else if (this.chicken.level >= 5) {
+            this.chicken.evolution = 'Adulto';
+        }
+
+        this.showMessage(`LEVEL UP! Nível ${this.chicken.level}`, 0xFFD700);
+        this.createChickenSprite();
+        this.updateUI();
+    }
+
+    spawnFruit() {
+        if (this.frutas.getChildren().length > 3) return;
+
+        const x = Phaser.Math.Between(300, 900);
+        const y = 300;
+
+        const fruit = this.add.circle(x, y, 15, 0xFF0000);
+        this.physics.add.existing(fruit);
+        fruit.body.setVelocityY(100);
+        fruit.body.setBounce(0.5);
+        this.frutas.add(fruit);
+
+        this.physics.overlap(this.chickenGroup, this.frutas, (chickenPart, fruit) => {
+            if (fruit.active) {
+                this.collectFruit(fruit);
+            }
+        });
+    }
+
+    collectFruit(fruit) {
+        const goldGain = Phaser.Math.Between(10, 25);
+        this.chicken.gold += goldGain;
+        this.chicken.hunger = Math.min(this.chicken.hunger + 15, this.chicken.hunger_max);
+
+        this.showMessage(`+${goldGain} Gold!`, 0xFFD700);
+
+        fruit.destroy();
+    }
+
+    spawnEnemy() {
+        const x = 800;
+        const y = 550;
+        const level = Math.min(this.chicken.level + Phaser.Math.Between(0, 2), this.chicken.level);
+
+        const enemy = {
+            x: x,
+            y: y,
+            level: level,
+            hp: 50 + level * 20,
+            hpMax: 50 + level * 20,
+            attack: 5 + level * 3,
+            defense: 2 + level * 1,
+            goldReward: level * 50,
+            sprite: null
+        };
+
+        const enemySprite = this.add.ellipse(x, y, 35, 45, 0xFF0000);
+        this.physics.add.existing(enemySprite);
+        enemySprite.body.setBounce(0.2);
+        enemySprite.body.setDrag(0.99);
+
+        enemy.sprite = enemySprite;
+        this.enemies.add(enemySprite);
+
+        // Adicionar mais decorações se for inimigo forte
+        if (level >= 5) {
+            const chifre = this.add.polygon(x, y - 40, [0, 0, -3, -8, 3, -8], 0xFFFFFF);
+            chifre.setDepth(3);
+        }
+    }
+
+    decreaseHunger() {
+        this.chicken.hunger -= 5;
+        if (this.chicken.hunger < 0) {
+            this.chicken.hunger = 0;
+            this.chicken.hp -= 5;
+        }
+
+        if (this.chicken.hp <= 0) {
+            this.scene.start('gameover', { gold: this.chicken.gold, level: this.chicken.level });
+        }
+    }
+
+    startBattle() {
+        if (this.enemies.getChildren().length === 0) {
+            this.showMessage('Nenhum inimigo disponível!', 0xFF0000);
+            return;
+        }
+
+        const enemy = this.enemies.getChildren()[0];
+        this.scene.start('battle', { 
+            chickenStats: this.chicken,
+            enemyStats: {
+                level: this.chicken.level + Phaser.Math.Between(0, 2),
+                hp: 50 + (this.chicken.level + 1) * 20,
+                hpMax: 50 + (this.chicken.level + 1) * 20,
+                attack: 5 + (this.chicken.level + 1) * 3,
+                defense: 2 + (this.chicken.level + 1),
+                goldReward: (this.chicken.level + 1) * 50
+            }
+        });
+    }
+
+    showMessage(text, color) {
+        const msg = this.add.text(500, 100, text, {
+            font: 'bold 24px Arial',
+            fill: color,
+            stroke: '#000000',
+            strokeThickness: 2
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: msg,
+            y: 50,
+            alpha: 0,
+            duration: 1500,
+            onComplete: () => msg.destroy()
+        });
+    }
+
+    updateUI() {
+        const uiText = `
+=== GROW A CHICKEN FIGHTER ===
+📊 Nível: ${this.chicken.level} | Evolução: ${this.chicken.evolution}
+⭐ EXP: ${this.chicken.exp}/${this.chicken.expMax}
+❤️  HP: ${this.chicken.hp}/${this.chicken.maxHp}
+🍗 Fome: ${this.chicken.hunger}/${this.chicken.hunger_max}
+💰 Ouro: ${this.chicken.gold}
+⚔️  Ataque: ${this.chicken.attack} | 🛡️  Defesa: ${this.chicken.defense}
+
+[SPACE] Treinar | [E] Alimentar
+[U] Upgrades | [B] Combater | [ESC] Menu
+`;
+        
+        if (this.uiText) this.uiText.destroy();
+        
+        this.uiText = this.add.text(10, 10, uiText, {
+            font: '14px Courier',
+            fill: '#000000',
+            backgroundColor: '#FFFFFF',
+            padding: { x: 10, y: 10 },
+            align: 'left'
+        });
+        this.uiText.setDepth(100);
+    }
+
+    update() {
+        // Animar o frango
+        this.chickenGroup.getChildren().forEach(child => {
+            if (child.y !== undefined) {
+                child.y += Math.sin(this.time.elapsed / 500) * 0.5;
+            }
+        });
+    }
+}
+
+// ================================
+// UPGRADE SCENE
+// ================================
+class UpgradeScene extends Phaser.Scene {
+    constructor() {
+        super('upgrade');
+    }
+
+    create() {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+
+        this.add.rectangle(0, 0, width, height, 0x333333).setOrigin(0, 0);
+
+        this.add.text(width / 2, 30, 'LOJA DE UPGRADES', {
+            font: 'bold 36px Arial',
+            fill: '#FFFF00'
+        }).setOrigin(0.5);
+
+        const gameScene = this.scene.get('game').chicken;
+
+        const upgrades = [
+            { 
+                name: 'Aumentar Ataque',
+                cost: 100,
+                y: 120,
+                action: () => {
+                    if (gameScene.gold >= 100) {
+                        gameScene.gold -= 100;
+                        gameScene.attack += 10;
+                        this.showMessage('Ataque aumentado!', 0x00FF00);
+                    } else {
+                        this.showMessage('Ouro insuficiente!', 0xFF0000);
+                    }
+                }
+            },
+            { 
+                name: 'Aumentar Defesa',
+                cost: 100,
+                y: 200,
+                action: () => {
+                    if (gameScene.gold >= 100) {
+                        gameScene.gold -= 100;
+                        gameScene.defense += 7;
+                        this.showMessage('Defesa aumentada!', 0x00FF00);
+                    } else {
+                        this.showMessage('Ouro insuficiente!', 0xFF0000);
+                    }
+                }
+            },
+            { 
+                name: 'Aumentar HP',
+                cost: 80,
+                y: 280,
+                action: () => {
+                    if (gameScene.gold >= 80) {
+                        gameScene.gold -= 80;
+                        gameScene.maxHp += 50;
+                        gameScene.hp = gameScene.maxHp;
+                        this.showMessage('HP aumentado!', 0x00FF00);
+                    } else {
+                        this.showMessage('Ouro insuficiente!', 0xFF0000);
+                    }
+                }
+            },
+            { 
+                name: 'Aumentar Velocidade',
+                cost: 60,
+                y: 360,
+                action: () => {
+                    if (gameScene.gold >= 60) {
+                        gameScene.gold -= 60;
+                        gameScene.speed += 5;
+                        this.showMessage('Velocidade aumentada!', 0x00FF00);
+                    } else {
+                        this.showMessage('Ouro insuficiente!', 0xFF0000);
+                    }
+                }
+            }
+        ];
+
+        upgrades.forEach(upgrade => {
+            this.createUpgradeButton(upgrade);
+        });
+
+        this.add.text(width / 2, 680, 'Ouro Disponível: ' + gameScene.gold, {
+            font: 'bold 18px Arial',
+            fill: '#FFD700'
+        }).setOrigin(0.5);
+
+        // Botão voltar
+        const backBtn = this.add.rectangle(width / 2, 730, 150, 40, 0xAA0000)
+            .setInteractive({ useHandCursor: true });
+        
+        this.add.text(width / 2, 730, 'VOLTAR', {
+            font: 'bold 16px Arial',
+            fill: '#FFFFFF'
+        }).setOrigin(0.5);
+
+        backBtn.on('pointerdown', () => {
+            this.scene.start('game');
+        });
+    }
+
+    createUpgradeButton(upgrade) {
+        const width = this.cameras.main.width;
+        const btn = this.add.rectangle(width / 2, upgrade.y, 300, 50, 0x0066AA)
+            .setInteractive({ useHandCursor: true });
+
+        this.add.text(width / 2 - 120, upgrade.y - 10, upgrade.name, {
+            font: 'bold 16px Arial',
+            fill: '#FFFFFF'
+        });
+
+        this.add.text(width / 2 + 80, upgrade.y + 5, `Custo: ${upgrade.cost}`, {
+            font: '14px Arial',
+            fill: '#FFD700'
+        });
+
+        btn.on('pointerdown', upgrade.action);
+        btn.on('pointerover', () => btn.setFillStyle(0x0088FF));
+        btn.on('pointerout', () => btn.setFillStyle(0x0066AA));
+    }
+
+    showMessage(text, color) {
+        const msg = this.add.text(this.cameras.main.centerX, 450, text, {
+            font: 'bold 20px Arial',
+            fill: color
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: msg,
+            alpha: 0,
+            duration: 1500,
+            onComplete: () => msg.destroy()
+        });
+    }
+}
+
+// ================================
+// BATTLE SCENE
+// ================================
+class BattleScene extends Phaser.Scene {
+    constructor() {
+        super('battle');
+    }
+
+    init(data) {
+        this.chickenStats = data.chickenStats;
+        this.enemyStats = data.enemyStats;
+    }
+
+    create() {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+
+        this.add.rectangle(0, 0, width, height, 0x2C2C2C).setOrigin(0, 0);
+
+        // Título
+        this.add.text(width / 2, 20, 'COMBATE!', {
+            font: 'bold 40px Arial',
+            fill: '#FF0000'
+        }).setOrigin(0.5);
+
+        // Seu frango
+        this.add.text(100, 100, 'SEU FRANGO', {
+            font: 'bold 18px Arial',
+            fill: '#FFD700'
+        });
+
+        this.add.text(100, 140, `Nível: ${this.chickenStats.level}`, {
+            font: '14px Arial',
+            fill: '#FFFFFF'
+        });
+
+        this.hpBarPlayer = this.add.rectangle(100, 170, 200, 20, 0xFF0000).setOrigin(0, 0);
+        this.hpBarPlayerBg = this.add.rectangle(100, 170, 200, 20, 0x00FF00).setOrigin(0, 0);
+        this.hpTextPlayer = this.add.text(110, 172, `${this.chickenStats.hp}/${this.chickenStats.maxHp}`, {
+            font: '12px Arial',
+            fill: '#000000'
+        });
+
+        // Inimigo
+        this.add.text(width - 300, 100, 'INIMIGO', {
+            font: 'bold 18px Arial',
+            fill: '#FF0000'
+        });
+
+        this.add.text(width - 300, 140, `Nível: ${this.enemyStats.level}`, {
+            font: '14px Arial',
+            fill: '#FFFFFF'
+        });
+
+        this.hpBarEnemy = this.add.rectangle(width - 300, 170, 200, 20, 0xFF0000).setOrigin(0, 0);
+        this.hpBarEnemyBg = this.add.rectangle(width - 300, 170, 200, 20, 0x00FF00).setOrigin(0, 0);
+        this.hpTextEnemy = this.add.text(width - 290, 172, `${this.enemyStats.hp}/${this.enemyStats.hpMax}`, {
+            font: '12px Arial',
+            fill: '#000000'
+        });
+
+        // Log de batalha
+        this.battleLog = this.add.text(width / 2, height / 2, '', {
+            font: '16px Arial',
+            fill: '#FFFFFF',
+            align: 'center',
+            wordWrap: { width: 600 }
+        }).setOrigin(0.5);
+
+        this.startBattle();
+    }
+
+    startBattle() {
+        let turn = 0;
+        let playerHp = this.chickenStats.hp;
+        let enemyHp = this.enemyStats.hp;
+        let log = 'COMBATE INICIADO!\n\n';
+
+        const battleInterval = setInterval(() => {
+            if (playerHp <= 0 || enemyHp <= 0) {
+                clearInterval(battleInterval);
+                this.endBattle(playerHp > 0, log);
+                return;
+            }
+
+            if (turn % 2 === 0) {
+                // Seu frango ataca
+                const damage = Math.max(1, this.chickenStats.attack - this.enemyStats.defense + Phaser.Math.Between(-10, 10));
+                enemyHp -= damage;
+                log += `🐔 Você causou ${damage} de dano!\n`;
+                this.updateEnemyHpBar(enemyHp);
+            } else {
+                // Inimigo ataca
+                const damage = Math.max(1, this.enemyStats.attack - this.chickenStats.defense + Phaser.Math.Between(-10, 10));
+                playerHp -= damage;
+                log += `💀 Inimigo causou ${damage} de dano!\n`;
+                this.updatePlayerHpBar(playerHp);
+            }
+
+            log += `\n🐔 HP: ${Math.max(0, playerHp)}/${this.chickenStats.maxHp}\n`;
+            log += `💀 Inimigo HP: ${Math.max(0, enemyHp)}/${this.enemyStats.hpMax}\n\n`;
+
+            this.battleLog.setText(log);
+            turn++;
+        }, 1500);
+    }
+
+    updatePlayerHpBar(hp) {
+        const percentage = Math.max(0, (hp / this.chickenStats.maxHp) * 200);
+        this.hpBarPlayer.setDisplayOrigin(0, 0);
+        this.hpBarPlayer.width = percentage;
+        this.hpTextPlayer.setText(`${Math.max(0, hp)}/${this.chickenStats.maxHp}`);
+    }
+
+    updateEnemyHpBar(hp) {
+        const width = this.cameras.main.width;
+        const percentage = Math.max(0, (hp / this.enemyStats.hpMax) * 200);
+        this.hpBarEnemy.width = percentage;
+        this.hpTextEnemy.setText(`${Math.max(0, hp)}/${this.enemyStats.hpMax}`);
+    }
+
+    endBattle(playerWon, log) {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+
+        if (playerWon) {
+            this.battleLog.setText(log + '\n🎉 VITÓRIA! 🎉\n+' + this.enemyStats.goldReward + ' Ouro');
+            this.chickenStats.gold += this.enemyStats.goldReward;
+            this.chickenStats.exp += 100;
+
+            // Verificar level up
+            if (this.chickenStats.exp >= this.chickenStats.expMax) {
+                this.chickenStats.level++;
+                this.chickenStats.exp = 0;
+                this.chickenStats.expMax += 50;
+                this.chickenStats.attack += 5;
+            }
+        } else {
+            this.battleLog.setText(log + '\n💀 DERROTA! 💀\nTente novamente...');
+            this.chickenStats.hp = this.chickenStats.maxHp / 2;
+            this.chickenStats.gold = Math.max(0, this.chickenStats.gold - this.enemyStats.goldReward / 2);
+        }
+
+        this.add.text(width / 2, height - 50, '[SPACE] Voltar ao Jogo', {
+            font: 'bold 18px Arial',
+            fill: '#FFFF00'
+        }).setOrigin(0.5);
+
+        this.input.keyboard.once('keydown-SPACE', () => {
+            this.scene.start('game');
+        });
+    }
+}
+
+// ================================
+// GAME OVER SCENE
+// ================================
+class GameOverScene extends Phaser.Scene {
+    constructor() {
+        super('gameover');
+    }
+
+    init(data) {
+        this.finalGold = data.gold;
+        this.finalLevel = data.level;
+    }
+
+    create() {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+
+        this.add.rectangle(0, 0, width, height, 0x000000).setOrigin(0, 0);
+
+        this.add.text(width / 2, 150, 'GAME OVER', {
+            font: 'bold 60px Arial',
+            fill: '#FF0000'
+        }).setOrigin(0.5);
+
+        this.add.text(width / 2, 280, 'SEU FRANGO FOI DERROTADO', {
+            font: '24px Arial',
+            fill: '#FFFFFF'
+        }).setOrigin(0.5);
+
+        this.add.text(width / 2, 380, `Nível Alcançado: ${this.finalLevel}`, {
+            font: 'bold 20px Arial',
+            fill: '#FFD700'
+        }).setOrigin(0.5);
+
+        this.add.text(width / 2, 440, `Ouro Coletado: ${this.finalGold}`, {
+            font: 'bold 20px Arial',
+            fill: '#FFD700'
+        }).setOrigin(0.5);
+
+        const restartBtn = this.add.rectangle(width / 2, 560, 200, 60, 0x00AA00)
+            .setInteractive({ useHandCursor: true });
+
+        this.add.text(width / 2, 560, 'REINICIAR', {
+            font: 'bold 24px Arial',
+            fill: '#FFFFFF'
+        }).setOrigin(0.5);
+
+        restartBtn.on('pointerdown', () => {
+            this.scene.start('menu');
+        });
+    }
+}
