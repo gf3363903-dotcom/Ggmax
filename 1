@@ -1,0 +1,233 @@
+--[ SCRIPT PARA "EVOLUIR E SOBREVIVER" - VERSÃO DELTA ]
+-- Funciona com detecção automática de alimentos e evolução
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+
+-- ========== CONFIGURAÇÕES ==========
+local AUTO_COLETAR = true   -- Coleta automática ao tocar em alimentos
+local XP_POR_COMIDA = 5     -- XP padrão caso não encontre o valor
+
+-- ========== SISTEMA DE XP E NÍVEL (detecta automaticamente) ==========
+local function getPlayerStats()
+    -- Tenta encontrar os valores de XP e Nível no jogador
+    local stats = player:FindFirstChild("leaderstats")
+    if stats then
+        local xp = stats:FindFirstChild("XP") or stats:FindFirstChild("Experience") or stats:FindFirstChild("EXP")
+        local level = stats:FindFirstChild("Nível") or stats:FindFirstChild("Level") or stats:FindFirstChild("LV")
+        if xp and level then
+            return { xp = xp, level = level }
+        end
+    end
+    -- Se não achar no leaderstats, procura em outras pastas
+    for _, child in ipairs(player:GetChildren()) do
+        if child:IsA("Folder") or child:IsA("Model") then
+            local xp = child:FindFirstChild("XP") or child:FindFirstChild("Experience")
+            local level = child:FindFirstChild("Nível") or child:FindFirstChild("Level")
+            if xp and level then
+                return { xp = xp, level = level }
+            end
+        end
+    end
+    return nil
+end
+
+local stats = getPlayerStats()
+if stats then
+    print("[Sistema] XP e Nível encontrados!")
+else
+    print("[Sistema] Não foi possível encontrar XP/Nível automaticamente. Usando modo manual.")
+end
+
+-- ========== FUNÇÃO PARA ADICIONAR XP ==========
+local function adicionarXP(valor)
+    if stats then
+        stats.xp.Value = stats.xp.Value + valor
+        print(string.format("[XP] +%d XP (Total: %d)", valor, stats.xp.Value))
+        player:Chat(string.format("Ganhei %d XP!", valor))
+    else
+        print(string.format("[XP] Simulação: +%d XP (não foi possível modificar diretamente)", valor))
+        player:Chat(string.format("+%d XP (simulado)", valor))
+    end
+end
+
+-- ========== FUNÇÃO PARA EVOLUIR (força a evolução) ==========
+local function evoluir()
+    -- Tenta encontrar uma função ou botão de evolução
+    -- Método 1: Procurar por um RemoteEvent ou BindableEvent
+    local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Evolve") or 
+                   game:GetService("ReplicatedStorage"):FindFirstChild("Evoluir")
+    if remote then
+        remote:FireServer()
+        print("[Evolução] Tentou evoluir via RemoteEvent")
+        player:Chat("Evoluindo...")
+        return true
+    end
+    
+    -- Método 2: Procurar por um botão na tela (GUI) e clicar
+    for _, gui in ipairs(player.PlayerGui:GetDescendants()) do
+        if gui:IsA("TextButton") and (gui.Name:lower():find("evoluir") or gui.Name:lower():find("evolve")) then
+            gui:Click()
+            print("[Evolução] Clicou no botão: " .. gui.Name)
+            player:Chat("Evoluindo...")
+            return true
+        end
+    end
+    
+    -- Método 3: Tentar chamar uma função global (se existir)
+    local success, result = pcall(function()
+        local evolveFunc = _G["Evolve"] or _G["Evoluir"] or _G["evoluir"]
+        if type(evolveFunc) == "function" then
+            evolveFunc()
+            return true
+        end
+    end)
+    if success and result then
+        print("[Evolução] Chamou função global de evolução")
+        player:Chat("Evoluindo...")
+        return true
+    end
+    
+    print("[Evolução] Não foi possível evoluir automaticamente. Use !evoluir para tentar manualmente.")
+    return false
+end
+
+-- ========== DETECÇÃO DE ALIMENTOS ==========
+local function isFood(part)
+    -- Verifica se a parte é um alimento
+    if not part:IsA("BasePart") then return false end
+    local name = part.Name:lower()
+    -- Lista de palavras-chave comuns
+    local keywords = {"food", "comida", "meat", "carne", "fruta", "berry", "insect", "ovo", "egg", "planta", "vegetable"}
+    for _, kw in ipairs(keywords) do
+        if name:find(kw) then
+            return true
+        end
+    end
+    -- Verifica atributos
+    if part:GetAttribute("IsFood") or part:GetAttribute("XP") or part:GetAttribute("Experience") then
+        return true
+    end
+    -- Verifica se é um modelo com nome de alimento
+    local parent = part.Parent
+    if parent and parent:IsA("Model") then
+        local parentName = parent.Name:lower()
+        for _, kw in ipairs(keywords) do
+            if parentName:find(kw) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function getXPValue(part)
+    -- Tenta obter o valor de XP do alimento
+    local attr = part:GetAttribute("XPValue") or part:GetAttribute("XP") or part:GetAttribute("Experience")
+    if attr then return tonumber(attr) or XP_POR_COMIDA end
+    -- Se não tiver atributo, usa valor padrão baseado no nome
+    local name = part.Name:lower()
+    if name:find("grande") or name:find("big") then return XP_POR_COMIDA * 2 end
+    if name:find("pequeno") or name:find("small") then return math.floor(XP_POR_COMIDA / 2) end
+    return XP_POR_COMIDA
+end
+
+-- ========== COLETA AUTOMÁTICA (quando tocar) ==========
+local function setupAlimento(part)
+    if not isFood(part) then return end
+    if part:GetAttribute("_scripted") then return end -- Evita duplicar conexões
+    part:SetAttribute("_scripted", true)
+    
+    part.Touched:Connect(function(hit)
+        if not AUTO_COLETAR then return end
+        local hitHumanoid = hit.Parent:FindFirstChildWhichIsA("Humanoid")
+        if not hitHumanoid then return end
+        local hitPlayer = Players:GetPlayerFromCharacter(hit.Parent)
+        if hitPlayer ~= player then return end
+        
+        -- Coleta o alimento
+        local xp = getXPValue(part)
+        adicionarXP(xp)
+        
+        -- Remove o alimento (se possível)
+        part:Destroy()
+    end)
+end
+
+-- Escaneia todos os alimentos existentes
+local function scanFoods()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and isFood(obj) then
+            setupAlimento(obj)
+        end
+    end
+end
+
+-- Observa novos alimentos sendo criados
+workspace.DescendantAdded:Connect(function(obj)
+    if obj:IsA("BasePart") and isFood(obj) then
+        setupAlimento(obj)
+    end
+end)
+
+-- ========== COMANDOS DE CHAT ==========
+player.Chatted:Connect(function(msg)
+    if msg:sub(1, 6) == "!addxp" then
+        local valor = tonumber(msg:sub(7))
+        if valor and valor > 0 then
+            adicionarXP(valor)
+        else
+            player:Chat("Uso: !addxp <quantidade>")
+        end
+    elseif msg:sub(1, 8) == "!evoluir" or msg == "!evolve" then
+        evoluir()
+    elseif msg == "!scan" then
+        scanFoods()
+        player:Chat("Alimentos escaneados!")
+    elseif msg == "!help" then
+        player:Chat("Comandos: !addxp, !evoluir, !scan")
+    end
+end)
+
+-- ========== INICIALIZAÇÃO ==========
+scanFoods()
+print("[Sistema de Evolução] Carregado para 'Evoluir e Sobreviver'!")
+player:Chat("Sistema de evolução carregado! Use !help para comandos.")
+
+-- Tenta evoluir automaticamente se já tiver XP suficiente (opcional)
+task.wait(2)
+if stats then
+    -- Verifica se o nível atual é menor que o máximo (exemplo: se o XP for alto)
+    -- Aqui você pode adicionar lógica para evoluir automaticamente se tiver XP
+    print("[Sistema] Nível atual: " .. stats.level.Value .. " | XP: " .. stats.xp.Value)
+end
+
+-- Loop para coletar automaticamente alimentos próximos (OPCIONAL - AUTO-FARM)
+--[[
+    -- Descomente esta parte se quiser que o personagem ande até os alimentos
+    -- (requer um caminho ou movimentação simples)
+    local function autoFarm()
+        while wait(1) do
+            local nearestFood = nil
+            local nearestDist = math.huge
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and isFood(obj) and obj.Parent and obj.Parent:IsA("Model") then
+                    local dist = (character.PrimaryPart.Position - obj.Position).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearestFood = obj
+                    end
+                end
+            end
+            if nearestFood and nearestDist < 50 then
+                -- Movimenta o personagem em direção ao alimento (simples)
+                local direction = (nearestFood.Position - character.PrimaryPart.Position).Unit
+                character:SetPrimaryPartCFrame(character.PrimaryPart.CFrame + direction * 2)
+            end
+        end
+    end
+    -- task.spawn(autoFarm)
+--]]
