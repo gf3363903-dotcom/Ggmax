@@ -1,0 +1,29 @@
+-- Exemplo MUITO simplificado de um sistema de evolução (para fins educacionais)
+-- Isso seria colocado em um Script de Servidor (ServerScript) dentro do Roblox Studio
+
+local pontosDeExperiencia = 0
+local nivelAtual = 1
+-- Tabela com as evoluções e os requisitos
+local evolucoes = {
+	{ nivel = 1, nome = "Inseto Rosa",	modelo = "InsetoRosa" },
+	{ nivel = 2, nome = "Formiga",		modelo = "Formiga", requisitoXP = 10 },
+	{ nivel = 3, nome = "Besouro",		modelo = "Besouro", requisitoXP = 30 },
+	{ nivel = 4, nome = "Escorpião",	modelo = "Escorpiao", requisitoXP = 60 }
+}
+
+-- Função chamada sempre que o jogador come algo no jogo
+function aoComerAlimento(valorXP)
+	pontosDeExperiencia = pontosDeExperiencia + valorXP
+	
+	-- Verifica se pode evoluir
+	local proximaEvolucao = evolucoes[nivelAtual + 1]
+	if proximaEvolucao and pontosDeExperiencia >= proximaEvolucao.requisitoXP then
+		nivelAtual = nivelAtual + 1
+		evoluirJogador(proximaEvolucao.modelo)
+		print("Evoluiu para: " .. proximaEvolucao.nome)
+	end
+end
+
+function evoluirJogador(modelo)
+	-- Código para trocar o modelo 3D do personagem para o próximo estágio
+end
