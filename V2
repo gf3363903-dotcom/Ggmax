@@ -1,0 +1,153 @@
+--[ SISTEMA DE EVOLUÇÃO - VERSÃO DELTA (CLIENTE) ]
+-- Execute este script no seu executor (Delta, Synapse, Krnl, etc.)
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+-- Configurações
+local evolucoes = {
+	{ nivel = 1, nome = "Inseto Rosa", id = "rbxassetid://1234567890", requisitoXP = 0 }, -- Substitua pelo ID do modelo
+	{ nivel = 2, nome = "Formiga", id = "rbxassetid://1234567891", requisitoXP = 10 },
+	{ nivel = 3, nome = "Besouro", id = "rbxassetid://1234567892", requisitoXP = 30 },
+	{ nivel = 4, nome = "Escorpião", id = "rbxassetid://1234567893", requisitoXP = 60 }
+}
+
+-- Dados do jogador
+local playerData = {
+	xp = 0,
+	nivelAtual = 1
+}
+
+-- Função para obter evolução por nível
+local function getEvolucaoPorNivel(nivel)
+	for _, ev in pairs(evolucoes) do
+		if ev.nivel == nivel then return ev end
+	end
+	return nil
+end
+
+-- Função que aplica a evolução (troca o modelo do personagem)
+local function evoluirJogador()
+	local currentEvo = getEvolucaoPorNivel(playerData.nivelAtual)
+	if not currentEvo then return end
+	
+	print(string.format("[Evolução] Você evoluiu para %s (Nível %d)", currentEvo.nome, currentEvo.nivel))
+	
+	-- Opção 1: Trocar a aparência via CharacterAppearance (mais simples)
+	-- player.CharacterAppearance = currentEvo.id
+	
+	-- Opção 2: Substituir o modelo inteiro (mais drástico)
+	local newCharacter = game:GetService("InsertService"):LoadAsset(currentEvo.id)
+	if newCharacter and newCharacter:IsA("Model") then
+		local oldChar = player.Character
+		if oldChar then
+			oldChar:Destroy()
+		end
+		newCharacter.Parent = workspace
+		player.Character = newCharacter
+		humanoid = newCharacter:WaitForChild("Humanoid")
+	end
+end
+
+-- Função para adicionar XP e verificar evolução
+local function adicionarXP(valor)
+	playerData.xp = playerData.xp + valor
+	print(string.format("[XP] Você ganhou %d XP (Total: %d)", valor, playerData.xp))
+	
+	-- Atualiza Leaderstats (placar local)
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		local xpStat = stats:FindFirstChild("XP")
+		if xpStat then xpStat.Value = playerData.xp end
+		local levelStat = stats:FindFirstChild("Nível")
+		if levelStat then levelStat.Value = playerData.nivelAtual end
+	end
+	
+	-- Verifica se pode evoluir (loop para múltiplas)
+	local nextLevel = playerData.nivelAtual + 1
+	local nextEvo = getEvolucaoPorNivel(nextLevel)
+	while nextEvo and playerData.xp >= nextEvo.requisitoXP do
+		playerData.nivelAtual = nextLevel
+		evoluirJogador()
+		nextLevel = nextLevel + 1
+		nextEvo = getEvolucaoPorNivel(nextLevel)
+	end
+end
+
+-- Configurar alimentos (itens no chão que dão XP ao tocar)
+local function setupAlimento(alimentoPart)
+	if not alimentoPart:IsA("BasePart") then return end
+	if alimentoPart:GetAttribute("XPValue") == nil then
+		alimentoPart:SetAttribute("XPValue", 5)
+	end
+	
+	alimentoPart.Touched:Connect(function(hit)
+		local hitHumanoid = hit.Parent:FindFirstChildWhichIsA("Humanoid")
+		if not hitHumanoid then return end
+		-- Verifica se quem tocou é o próprio jogador
+		local hitPlayer = game.Players:GetPlayerFromCharacter(hit.Parent)
+		if hitPlayer ~= player then return end
+		
+		local valorXP = alimentoPart:GetAttribute("XPValue") or 5
+		adicionarXP(valorXP)
+		alimentoPart:Destroy() -- Remove o alimento após coletar
+	end)
+end
+
+-- Escanear alimentos já existentes no Workspace
+local function configurarAlimentosExistentes()
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") and obj:GetAttribute("IsFood") == true then
+			setupAlimento(obj)
+		end
+	end
+end
+
+-- Observar novos alimentos sendo adicionados
+workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("BasePart") and obj:GetAttribute("IsFood") == true then
+		setupAlimento(obj)
+	end
+end)
+
+-- Criar Leaderstats local (apenas para exibição)
+local function criarLeaderstats()
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+	
+	local xpStat = Instance.new("NumberValue")
+	xpStat.Name = "XP"
+	xpStat.Value = 0
+	xpStat.Parent = leaderstats
+	
+	local levelStat = Instance.new("NumberValue")
+	levelStat.Name = "Nível"
+	levelStat.Value = 1
+	levelStat.Parent = leaderstats
+end
+
+-- Inicializar
+criarLeaderstats()
+configurarAlimentosExistentes()
+
+-- Aplicar a evolução inicial (Nível 1)
+local evoInicial = getEvolucaoPorNivel(1)
+if evoInicial then
+	player.CharacterAppearance = evoInicial.id -- ou substitui o modelo se preferir
+end
+
+print("[Sistema de Evolução] Carregado com sucesso! Toque em alimentos para ganhar XP.")
+
+-- [OPCIONAL] Comando de chat para adicionar XP manualmente
+game:GetService("Players").LocalPlayer.Chatted:Connect(function(msg)
+	if msg:sub(1, 6) == "!addxp" then
+		local valor = tonumber(msg:sub(7))
+		if valor and valor > 0 then
+			adicionarXP(valor)
+		else
+			print("Uso: !addxp <quantidade>")
+		end
+	end
+end)
